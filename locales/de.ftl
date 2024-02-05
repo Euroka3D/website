@@ -6,3 +6,6 @@ service_design_optimisation_desc = Fachkundige Beratung und Unterstützung, um d
 
 learn_more = Mehr erfahren
 our_services = Unsere Dienstleistungen
+
+footer_help_title = Hilfe
+footer_contact_us = Kontaktieren Sie uns

@@ -6,3 +6,6 @@ service_design_optimisation_desc = Expert advice and assistance to help your des
 
 learn_more = Learn More
 our_services = Our Services
+
+footer_help_title = Help
+footer_contact_us = Contact Us

@@ -16,12 +16,11 @@ struct PageTemplate {
 
 #[derive(Template)]
 #[template(path = "header.html")]
-struct HeaderTemplate {
-}
+struct HeaderTemplate {}
 
 // Define your Askama template
 #[derive(Template)]
-#[template(path = "index.html")]
+#[template(path = "index_body.html")]
 struct IndexBodyTemplate {
     our_services: String,
     services: Vec<Service>,
@@ -32,10 +31,6 @@ struct IndexBodyTemplate {
 struct FooterTemplate {
     help_section_title: String,
     contact_us: String,
-    contact_us_link: String,
-    faq: String,
-    faq_link: String,
-
 }
 
 fn load_fluent_bundles(lang: &LanguageIdentifier) -> FluentBundle<FluentResource> {
@@ -45,10 +40,9 @@ fn load_fluent_bundles(lang: &LanguageIdentifier) -> FluentBundle<FluentResource
     let resource = FluentResource::try_new(ftl_string)
         .unwrap_or_else(|_| panic!("Failed to parse the FTL file: {}", ftl_path));
     let mut bundle = FluentBundle::new(vec![lang.clone()]);
-    bundle.add_resource(resource).unwrap_or_else(|_| panic!(
-        "Failed to add FTL resource to the bundle: {}",
-        lang
-    ));
+    bundle
+        .add_resource(resource)
+        .unwrap_or_else(|_| panic!("Failed to add FTL resource to the bundle: {}", lang));
 
     bundle
 }
@@ -151,9 +145,29 @@ async fn index(lang: web::Path<String>) -> impl Responder {
             )
             .into(),
     };
-    let footer = FooterTemplate{ help_section_title: todo!(), contact_us: todo!(), contact_us_link: todo!(), faq: todo!(), faq_link: todo!() };
+    let footer = FooterTemplate {
+        help_section_title: bundle
+            .format_pattern(
+                bundle.get_message("footer_help_title").unwrap().value().unwrap(),
+                None,
+                &mut vec![],
+            )
+            .into(),
+        contact_us: bundle
+            .format_pattern(
+                bundle.get_message("footer_contact_us").unwrap().value().unwrap(),
+                None,
+                &mut vec![],
+            )
+            .into(),
+    };
     let header = HeaderTemplate {};
-    let page = PageTemplate { lang: lang_code.to_string(), header, main: idx_template.to_string(), footer };
+    let page = PageTemplate {
+        lang: lang_code.to_string(),
+        header,
+        main: idx_template.to_string(),
+        footer,
+    };
 
     // // Map services to localized versions
     // let localized_services: Vec<Service> = idx_template.services.into_iter().map(|service| {

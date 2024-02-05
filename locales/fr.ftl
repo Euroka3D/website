@@ -6,3 +6,6 @@ service_design_optimisation_desc = Conseils d'experts et assistance pour optimis
 
 learn_more = En savoir plus
 our_services = Nos Services
+
+footer_help_title = Aide 
+footer_contact_us = Contactez-Nous
