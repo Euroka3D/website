@@ -148,14 +148,22 @@ async fn index(lang: web::Path<String>) -> impl Responder {
     let footer = FooterTemplate {
         help_section_title: bundle
             .format_pattern(
-                bundle.get_message("footer_help_title").unwrap().value().unwrap(),
+                bundle
+                    .get_message("footer_help_title")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
                 None,
                 &mut vec![],
             )
             .into(),
         contact_us: bundle
             .format_pattern(
-                bundle.get_message("footer_contact_us").unwrap().value().unwrap(),
+                bundle
+                    .get_message("footer_contact_us")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
                 None,
                 &mut vec![],
             )
