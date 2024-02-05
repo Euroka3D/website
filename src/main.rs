@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use actix_files as fs;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use askama::Template;
@@ -31,6 +32,10 @@ struct IndexBodyTemplate {
 struct FooterTemplate {
     help_section_title: String,
     contact_us: String,
+}
+
+async fn faq() -> impl Responder {
+    HttpResponse::Ok().body("raw-content here")
 }
 
 fn load_fluent_bundles(lang: &LanguageIdentifier) -> FluentBundle<FluentResource> {
@@ -76,98 +81,39 @@ async fn index(lang: web::Path<String>) -> impl Responder {
     let lang = lang_code.parse().unwrap(); //_or_else(|_| "en".parse().expect("parsing_error"));
     let bundle = load_fluent_bundles(&lang);
 
+    let msg_get = |title: &str, bundle: &FluentBundle<FluentResource>| {
+        bundle
+                .format_pattern(
+                    bundle
+                        .get_message(title)
+                        .unwrap()
+                        .value()
+                        .unwrap(),
+                    None,
+                    &mut vec![],
+                )
+                .into()
+    };
     let services = vec![
         Service {
-            name: bundle
-                .format_pattern(
-                    bundle
-                        .get_message("service_3DPrinting")
-                        .unwrap()
-                        .value()
-                        .unwrap(),
-                    None,
-                    &mut vec![],
-                )
-                .into(),
-            description: bundle
-                .format_pattern(
-                    bundle
-                        .get_message("service_3DPrinting_desc")
-                        .unwrap()
-                        .value()
-                        .unwrap(),
-                    None,
-                    &mut vec![],
-                )
-                .into(),
+            name: msg_get("service_3DPrinting", &bundle),
+            description: msg_get("service_3DPrinting_desc", &bundle),
             link: "/fdm-3d-printing".to_string(),
         },
         Service {
-            name: bundle
-                .format_pattern(
-                    bundle
-                        .get_message("service_design_optimisation")
-                        .unwrap()
-                        .value()
-                        .unwrap(),
-                    None,
-                    &mut vec![],
-                )
-                .into(),
-            description: bundle
-                .format_pattern(
-                    bundle
-                        .get_message("service_design_optimisation_desc")
-                        .unwrap()
-                        .value()
-                        .unwrap(),
-                    None,
-                    &mut vec![],
-                )
-                .into(),
+            name: msg_get("service_design_optimisation", &bundle),
+            description: msg_get("service_design_optimisation_desc", &bundle),
             link: "/design-optimisation".to_string(),
         },
     ];
     let idx_template = IndexBodyTemplate {
-        our_services: bundle
-            .format_pattern(
-                bundle.get_message("our_services").unwrap().value().unwrap(),
-                None,
-                &mut vec![],
-            )
-            .into(),
+        our_services: msg_get("our_services", &bundle),
         services,
-        learn_more: bundle
-            .format_pattern(
-                bundle.get_message("learn_more").unwrap().value().unwrap(),
-                None,
-                &mut vec![],
-            )
-            .into(),
+        learn_more: msg_get("learn_more", &bundle),
     };
     let footer = FooterTemplate {
-        help_section_title: bundle
-            .format_pattern(
-                bundle
-                    .get_message("footer_help_title")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            )
-            .into(),
-        contact_us: bundle
-            .format_pattern(
-                bundle
-                    .get_message("footer_contact_us")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            )
-            .into(),
+        help_section_title: msg_get("footer_help_title", &bundle),
+        contact_us: msg_get("footer_contact_us", &bundle),
     };
     let header = HeaderTemplate {};
     let page = PageTemplate {
@@ -208,9 +154,9 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(middleware::Logger::default())
             .service(fs::Files::new("/static", "static").use_last_modified(true)) // Serve static files
-            .route("/", web::get().to(en_redirect)) // Serve the index page
-            .route("/{lang}/", web::get().to(index)) // Serve the index page
-                                                     // Add other routes and services as needed
+            .route("/", web::get().to(en_redirect))
+            .route("/{lang}/", web::get().to(index))
+            .route("/{lang}/faq", web::get().to(faq))
     })
     .bind("127.0.0.1:8080")?
     .run()
