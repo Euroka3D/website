@@ -1,9 +1,9 @@
 use actix_files as fs;
-use actix_web::{web, App, HttpResponse, HttpServer, Responder, middleware};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use askama::Template;
 use fluent::{FluentBundle, FluentResource};
-use unic_langid::LanguageIdentifier; // Make sure you include the Template trait
 use std::borrow::Borrow;
+use unic_langid::LanguageIdentifier; // Make sure you include the Template trait
 
 // Define your Askama template
 #[derive(Template)]
@@ -20,9 +20,11 @@ fn load_fluent_bundles(lang: &LanguageIdentifier) -> FluentBundle<FluentResource
     let resource = FluentResource::try_new(ftl_string)
         .expect(&format!("Failed to parse the FTL file: {}", ftl_path));
     let mut bundle = FluentBundle::new(vec![lang.clone()]);
-    bundle.add_resource(resource)
-        .expect(&format!("Failed to add FTL resource to the bundle: {}", lang));
-    
+    bundle.add_resource(resource).expect(&format!(
+        "Failed to add FTL resource to the bundle: {}",
+        lang
+    ));
+
     bundle
 }
 
@@ -34,7 +36,9 @@ struct Service {
 }
 
 async fn en_redirect() -> impl Responder {
-    HttpResponse::Found().append_header(("Location", "/en/")).finish()
+    HttpResponse::Found()
+        .append_header(("Location", "/en/"))
+        .finish()
 }
 
 async fn index(lang: web::Path<String>) -> impl Responder {
@@ -50,22 +54,78 @@ async fn index(lang: web::Path<String>) -> impl Responder {
     }
     //
     // Assume English as the default language
-    let lang = lang_code.parse().unwrap();//_or_else(|_| "en".parse().expect("parsing_error"));
+    let lang = lang_code.parse().unwrap(); //_or_else(|_| "en".parse().expect("parsing_error"));
     let bundle = load_fluent_bundles(&lang);
 
     let services = vec![
         Service {
-            name: bundle.format_pattern(bundle.get_message("service_3DPrinting").unwrap().value().unwrap(), None, &mut vec![]).into(),
-            description: bundle.format_pattern(bundle.get_message("service_3DPrinting_desc").unwrap().value().unwrap(), None, &mut vec![]).into(),
+            name: bundle
+                .format_pattern(
+                    bundle
+                        .get_message("service_3DPrinting")
+                        .unwrap()
+                        .value()
+                        .unwrap(),
+                    None,
+                    &mut vec![],
+                )
+                .into(),
+            description: bundle
+                .format_pattern(
+                    bundle
+                        .get_message("service_3DPrinting_desc")
+                        .unwrap()
+                        .value()
+                        .unwrap(),
+                    None,
+                    &mut vec![],
+                )
+                .into(),
             link: "/fdm-3d-printing".to_string(),
         },
         Service {
-            name: bundle.format_pattern(bundle.get_message("service_design_optimisation").unwrap().value().unwrap(), None, &mut vec!{}).into(),
-            description: bundle.format_pattern(bundle.get_message("service_design_optimisation_desc").unwrap().value().unwrap(), None, &mut vec!{}).into(),
+            name: bundle
+                .format_pattern(
+                    bundle
+                        .get_message("service_design_optimisation")
+                        .unwrap()
+                        .value()
+                        .unwrap(),
+                    None,
+                    &mut vec![],
+                )
+                .into(),
+            description: bundle
+                .format_pattern(
+                    bundle
+                        .get_message("service_design_optimisation_desc")
+                        .unwrap()
+                        .value()
+                        .unwrap(),
+                    None,
+                    &mut vec![],
+                )
+                .into(),
             link: "/design-optimisation".to_string(),
         },
     ];
-    let idx_template = IndexTemplate{our_services: bundle.format_pattern(bundle.get_message("our_services").unwrap().value().unwrap(), None, &mut vec![]).into(), services, learn_more: bundle.format_pattern(bundle.get_message("learn_more").unwrap().value().unwrap(), None, &mut vec![]).into()};
+    let idx_template = IndexTemplate {
+        our_services: bundle
+            .format_pattern(
+                bundle.get_message("our_services").unwrap().value().unwrap(),
+                None,
+                &mut vec![],
+            )
+            .into(),
+        services,
+        learn_more: bundle
+            .format_pattern(
+                bundle.get_message("learn_more").unwrap().value().unwrap(),
+                None,
+                &mut vec![],
+            )
+            .into(),
+    };
 
     // // Map services to localized versions
     // let localized_services: Vec<Service> = idx_template.services.into_iter().map(|service| {
@@ -100,10 +160,9 @@ async fn main() -> std::io::Result<()> {
             .service(fs::Files::new("/static", "static").use_last_modified(true)) // Serve static files
             .route("/", web::get().to(en_redirect)) // Serve the index page
             .route("/{lang}/", web::get().to(index)) // Serve the index page
-            // Add other routes and services as needed
+                                                     // Add other routes and services as needed
     })
     .bind("127.0.0.1:8080")?
     .run()
     .await
 }
-
