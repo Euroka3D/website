@@ -16,11 +16,11 @@ struct IndexTemplate {
 fn load_fluent_bundles(lang: &LanguageIdentifier) -> FluentBundle<FluentResource> {
     let ftl_path = format!("locales/{}.ftl", lang);
     let ftl_string = std::fs::read_to_string(&ftl_path)
-        .expect(&format!("Failed to load FTL file: {}", &ftl_path));
+        .unwrap_or_else(|_| panic!("Failed to load FTL file: {}", &ftl_path));
     let resource = FluentResource::try_new(ftl_string)
-        .expect(&format!("Failed to parse the FTL file: {}", ftl_path));
+        .unwrap_or_else(|_| panic!("Failed to parse the FTL file: {}", ftl_path));
     let mut bundle = FluentBundle::new(vec![lang.clone()]);
-    bundle.add_resource(resource).expect(&format!(
+    bundle.add_resource(resource).unwrap_or_else(|_| panic!(
         "Failed to add FTL resource to the bundle: {}",
         lang
     ));
@@ -47,7 +47,7 @@ async fn index(lang: web::Path<String>) -> impl Responder {
     let lang_code = lang.borrow();
 
     // Supported languages
-    let supported_languages = vec!["en", "fr", "de"];
+    let supported_languages = ["en", "fr", "de"];
 
     if !supported_languages.contains(&lang_code.as_str()) {
         return HttpResponse::Ok().body(format!("'{}' not a supported language.", lang_code));
