@@ -5,14 +5,39 @@ use fluent::{FluentBundle, FluentResource};
 use std::borrow::Borrow;
 use unic_langid::LanguageIdentifier; // Make sure you include the Template trait
 
+#[derive(Template)]
+#[template(path = "page.html")]
+struct PageTemplate {
+    lang: String,
+    header: HeaderTemplate,
+    main: String,
+    footer: FooterTemplate,
+}
+
+#[derive(Template)]
+#[template(path = "header.html")]
+struct HeaderTemplate {
+}
+
 // Define your Askama template
 #[derive(Template)]
 #[template(path = "index.html")]
-struct IndexTemplate {
+struct IndexBodyTemplate {
     our_services: String,
     services: Vec<Service>,
     learn_more: String,
 }
+#[derive(Template)]
+#[template(path = "footer.html")]
+struct FooterTemplate {
+    help_section_title: String,
+    contact_us: String,
+    contact_us_link: String,
+    faq: String,
+    faq_link: String,
+
+}
+
 fn load_fluent_bundles(lang: &LanguageIdentifier) -> FluentBundle<FluentResource> {
     let ftl_path = format!("locales/{}.ftl", lang);
     let ftl_string = std::fs::read_to_string(&ftl_path)
@@ -109,7 +134,7 @@ async fn index(lang: web::Path<String>) -> impl Responder {
             link: "/design-optimisation".to_string(),
         },
     ];
-    let idx_template = IndexTemplate {
+    let idx_template = IndexBodyTemplate {
         our_services: bundle
             .format_pattern(
                 bundle.get_message("our_services").unwrap().value().unwrap(),
@@ -126,6 +151,9 @@ async fn index(lang: web::Path<String>) -> impl Responder {
             )
             .into(),
     };
+    let footer = FooterTemplate{ help_section_title: todo!(), contact_us: todo!(), contact_us_link: todo!(), faq: todo!(), faq_link: todo!() };
+    let header = HeaderTemplate {};
+    let page = PageTemplate { lang: lang_code.to_string(), header, main: idx_template.to_string(), footer };
 
     // // Map services to localized versions
     // let localized_services: Vec<Service> = idx_template.services.into_iter().map(|service| {
@@ -143,7 +171,7 @@ async fn index(lang: web::Path<String>) -> impl Responder {
     //     services: localized_services,
     // };
 
-    match idx_template.render() {
+    match page.render() {
         Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
         Err(_) => HttpResponse::InternalServerError().into(),
     }

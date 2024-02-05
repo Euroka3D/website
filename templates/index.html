@@ -1,58 +1,22 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Euro3d</title>
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <header>
-        <nav>
-            <div class="language-selector">
-                <button aria-label="Select Language" title="Select Language">🌐</button>
-                <ul class="language-menu">
-                    <li><a href="/en/"><span role="img" aria-label="English">🇬🇧</span> EN</a></li>
-                    <li><a href="/fr/"><span role="img" aria-label="French">🇫🇷</span> FR</a></li>
-                    <li><a href="/de/"><span role="img" aria-label="German">🇩🇪</span> DE</a></li>
-                </ul>
-            </div>
 
-        </nav>
-    </header>
+<section class="hero">
+    <!-- Hero content -->
+</section>
 
-    <main>
-        <section class="hero">
-            <!-- Hero content -->
-        </section>
+<section class="services">
+    <div class="container">
+	    <h2>{{ our_services }}</h2>
+	{% for service in services %}
+	<div class="service-item">
+		<h3>{{ service.name }}</h3>
+		<p>{{ service.description }}</p>
+		<a href="{{ service.link }}" class="btn">{{ learn_more }}</a>
+	</div>
+	{% endfor %}
+    </div>
+</section>
 
-        <section class="services">
-            <div class="container">
-		    <h2>{{ our_services }}</h2>
-		{% for service in services %}
-                <div class="service-item">
-			<h3>{{ service.name }}</h3>
-			<p>{{ service.description }}</p>
-			<a href="{{ service.link }}" class="btn">{{ learn_more }}</a>
-                </div>
-		{% endfor %}
-            </div>
-        </section>
-
-        <section class="latest-news">
-            <!-- Latest news at the company -->
-        </section>
-    </main>
-
-    <footer>
-        <!-- Footer content -->
-    </footer>
-    <script>
-        document.querySelector('.language-selector button').addEventListener('click', function() {
-            var menu = document.querySelector('.language-menu');
-            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-        });
-    </script>
-</body>
-</html>
+<section class="latest-news">
+    <!-- Latest news at the company -->
+</section>
 

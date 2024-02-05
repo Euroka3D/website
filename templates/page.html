@@ -1,0 +1,21 @@
+
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Euroka3d</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+	{{ header }}
+	<main>{{ main }}</main>
+	{{ footer }}
+    <script>
+        document.querySelector('.language-selector button').addEventListener('click', function() {
+            var menu = document.querySelector('.language-menu');
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+        });
+    </script>
+</body>
+</html>
