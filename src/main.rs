@@ -1,9 +1,9 @@
 #![allow(clippy::uninlined_format_args)]
 use actix_files as fs;
-use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder, FromRequest};
+use actix_web::{http, middleware, web, App, FromRequest, HttpResponse, HttpServer, Responder};
 use askama::Template;
 use fluent::{FluentBundle, FluentResource};
-use std::{borrow::Borrow, future::Ready};
+use std::future::Ready;
 use unic_langid::LanguageIdentifier; // Make sure you include the Template trait
 
 #[derive(Template)]
@@ -24,7 +24,7 @@ struct IndexBodyTemplate {
     learn_more: String,
 }
 
-async fn faq() -> impl Responder {
+async fn faq(_lang: Lang) -> impl Responder {
     HttpResponse::Ok().body("raw-content here")
 }
 
@@ -49,27 +49,10 @@ struct OfferedService {
     link: String,
 }
 
-async fn en_redirect() -> impl Responder {
-    HttpResponse::Found()
-        .append_header(("Location", "/en/"))
-        .finish()
-}
-
-async fn index(lang: web::Path<String>) -> impl Responder {
-    log::info!("path: {}", lang);
+async fn index(lang: Lang) -> impl Responder {
     // TODO: custom extractor
-    let lang_code = lang.borrow();
 
-    // Supported languages
-    let supported_languages = ["en", "fr", "de"];
-
-    if !supported_languages.contains(&lang_code.as_str()) {
-        return HttpResponse::Ok().body(format!("'{}' not a supported language.", lang_code));
-    }
-    //
-    // Assume English as the default language
-    let lang = lang_code.parse().unwrap(); //_or_else(|_| "en".parse().expect("parsing_error"));
-    let bundle = load_fluent_bundles(&lang);
+    let bundle = load_fluent_bundles(&lang.as_ref().parse().unwrap());
 
     let msg_get = |title: &str, bundle: &FluentBundle<FluentResource>| {
         bundle
@@ -99,7 +82,7 @@ async fn index(lang: web::Path<String>) -> impl Responder {
     };
 
     let page = PageTemplate {
-        lang: lang_code.to_string(),
+        lang: lang.as_ref().to_string(),
         main: idx_template.to_string(),
         help_section_title: msg_get("footer_help_title", &bundle),
         contact_us: msg_get("footer_contact_us", &bundle),
@@ -132,8 +115,12 @@ impl Lang {
             let Some(qual_part) = parts.next() else {
                 return Ok(lang);
             };
-            let stripped_qual: &str = qual_part.strip_prefix("q=").expect("todo: trigger a malformed header error");
-            let quality: f32 = stripped_qual.parse::<f32>().expect("todo: trigger a malformed header error");
+            let stripped_qual: &str = qual_part
+                .strip_prefix("q=")
+                .expect("todo: trigger a malformed header error");
+            let quality: f32 = stripped_qual
+                .parse::<f32>()
+                .expect("todo: trigger a malformed header error");
             if quality == 1.0 {
                 return Ok(lang);
             }
@@ -154,9 +141,9 @@ impl Lang {
     }
 }
 
-impl From<Lang> for &str {
-    fn from(value: Lang) -> Self {
-        match value {
+impl AsRef<str> for Lang {
+    fn as_ref(&self) -> &str {
+        match self {
             Lang::En => "en",
             Lang::Fr => "fr",
             Lang::De => "de",
@@ -171,16 +158,16 @@ impl<'a> TryFrom<&'a str> for Lang {
         // from the `-` onwards: get rid of it. we don't care about region
         let lang = match dbg!(lang_str.split_once('-')) {
             Some((lang, _region)) => lang,
-            _ => lang_str
+            _ => lang_str,
         };
-        
+
         log::info!("lang: {}", lang);
 
         match lang {
             "en" => Ok(Lang::En),
             "fr" => Ok(Lang::Fr),
             "de" => Ok(Lang::De),
-            _ => Err(lang_str)
+            _ => Err(lang_str),
         }
     }
 }
@@ -196,7 +183,10 @@ impl FromRequest for Lang {
 
     type Future = Ready<Result<Lang, Self::Error>>;
 
-    fn from_request(req: &actix_web::HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
+    fn from_request(
+        req: &actix_web::HttpRequest,
+        _payload: &mut actix_web::dev::Payload,
+    ) -> Self::Future {
         log::info!("entered from-request");
         let Some(lang_str) = req.match_info().get("lang") else {
             return std::future::ready(Ok(Lang::default()));
@@ -208,18 +198,20 @@ impl FromRequest for Lang {
 async fn prefix_fallback_lang(req: actix_web::HttpRequest) -> impl Responder {
     log::info!("entered prefix fallback");
     let path = req.path().trim_start_matches('/');
-    let lang_str = req.headers()
+    let lang_str = req
+        .headers()
         .get("Accept-Language")
-        .and_then(|hv|hv.to_str().ok())
+        .and_then(|hv| hv.to_str().ok())
         .unwrap_or_default();
     let Ok(lang) = Lang::from_accept_lang_header(lang_str) else {
-        return  HttpResponse::InternalServerError();
+        return HttpResponse::InternalServerError().finish();
     };
 
-    let as_str: &str = lang.into();
-
-    log::info!("end of prefix addition: {:#?}", as_str);
-    HttpResponse::Ok()
+    log::info!("end of prefix addition: {:#?}", &lang);
+    let new_path = format!("/{}/{}", lang.as_ref(), path);
+    HttpResponse::Found()
+        .append_header((http::header::LOCATION, new_path))
+        .finish()
 }
 
 #[actix_web::main]
@@ -235,7 +227,7 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/{lang}")
                     .route("", web::get().to(index))
-                    .route("/faq", web::get().to(faq))
+                    .route("/faq", web::get().to(faq)),
             )
             .default_service(web::get().to(prefix_fallback_lang))
     })
