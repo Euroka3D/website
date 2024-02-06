@@ -10,14 +10,10 @@ use unic_langid::LanguageIdentifier; // Make sure you include the Template trait
 #[template(path = "page.html")]
 struct PageTemplate {
     lang: String,
-    header: HeaderTemplate,
     main: String,
-    footer: FooterTemplate,
+    help_section_title: String,
+    contact_us: String,
 }
-
-#[derive(Template)]
-#[template(path = "header.html")]
-struct HeaderTemplate {}
 
 // Define your Askama template
 #[derive(Template)]
@@ -26,12 +22,6 @@ struct IndexBodyTemplate {
     our_services: String,
     services: Vec<Service>,
     learn_more: String,
-}
-#[derive(Template)]
-#[template(path = "footer.html")]
-struct FooterTemplate {
-    help_section_title: String,
-    contact_us: String,
 }
 
 async fn faq() -> impl Responder {
@@ -83,16 +73,12 @@ async fn index(lang: web::Path<String>) -> impl Responder {
 
     let msg_get = |title: &str, bundle: &FluentBundle<FluentResource>| {
         bundle
-                .format_pattern(
-                    bundle
-                        .get_message(title)
-                        .unwrap()
-                        .value()
-                        .unwrap(),
-                    None,
-                    &mut vec![],
-                )
-                .into()
+            .format_pattern(
+                bundle.get_message(title).unwrap().value().unwrap(),
+                None,
+                &mut vec![],
+            )
+            .into()
     };
     let services = vec![
         Service {
@@ -111,33 +97,13 @@ async fn index(lang: web::Path<String>) -> impl Responder {
         services,
         learn_more: msg_get("learn_more", &bundle),
     };
-    let footer = FooterTemplate {
+
+    let page = PageTemplate {
+        lang: lang_code.to_string(),
+        main: idx_template.to_string(),
         help_section_title: msg_get("footer_help_title", &bundle),
         contact_us: msg_get("footer_contact_us", &bundle),
     };
-    let header = HeaderTemplate {};
-    let page = PageTemplate {
-        lang: lang_code.to_string(),
-        header,
-        main: idx_template.to_string(),
-        footer,
-    };
-
-    // // Map services to localized versions
-    // let localized_services: Vec<Service> = idx_template.services.into_iter().map(|service| {
-    //     let name = bundle.get_message(&service.name)
-    //         .and_then(|m| m.value())
-    //         .map_or_else(|| "Missing Translation".to_string(), |v| bundle.format_pattern(v, None, &mut vec![]).to_string());
-    //     let description = bundle.get_message(&service.description)
-    //         .and_then(|m| m.value())
-    //         .map_or_else(|| "Missing Translation".to_string(), |v| bundle.format_pattern(v, None, &mut vec![]).to_string());
-
-    //     Service { name, description }
-    // }).collect();
-
-    // let template = IndexTemplate {
-    //     services: localized_services,
-    // };
 
     match page.render() {
         Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),

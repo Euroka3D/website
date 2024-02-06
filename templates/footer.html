@@ -2,7 +2,7 @@
     <div class="footer-section">
         <h3>{{ help_section_title }}</h3>
         <ul>
-    	    <li hx-get="/faq" hx-trigger="click" hx-swap="innerHTML" hx-target="main">FAQ</li>
+		<li hx-get="/{{lang}}/faq" hx-trigger="click" hx-swap="innerHTML" hx-target="main">FAQ</li>
     	    <li hx-get="/contact" hx-trigger="click" hx-swap="innerHTML" hx-target="main">{{ contact_us }}</li>
         </ul>
     </div>
