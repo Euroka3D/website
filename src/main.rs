@@ -105,6 +105,7 @@ enum Lang {
     Fr,
     // German
     De,
+    He,
 }
 
 impl Lang {
@@ -152,6 +153,7 @@ impl AsRef<str> for Lang {
             Lang::En => "en",
             Lang::Fr => "fr",
             Lang::De => "de",
+            Lang::He => "he",
         }
     }
 }
@@ -169,6 +171,7 @@ impl<'a> TryFrom<&'a str> for Lang {
             "en" => Ok(Lang::En),
             "fr" => Ok(Lang::Fr),
             "de" => Ok(Lang::De),
+            "he" => Ok(Lang::He),
             _ => Err(lang_str),
         }
     }
