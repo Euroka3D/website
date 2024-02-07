@@ -1,10 +1,16 @@
 #![allow(clippy::uninlined_format_args)]
 use actix_files as fs;
-use actix_web::{http::{self, header}, middleware, web, App, FromRequest, HttpResponse, HttpServer, Responder, dev::{Transform, ServiceResponse, ServiceRequest, Service, forward_ready}};
+use actix_web::{
+    body::EitherBody,
+    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
+    http::{self, header},
+    middleware, web, App, FromRequest, HttpResponse, HttpServer, Responder,
+};
 use askama::Template;
 use fluent::{FluentBundle, FluentResource};
-use std::{future::{ready, Ready, Future }, pin::Pin};
+use std::future::{ready, Ready};
 use unic_langid::LanguageIdentifier; // Make sure you include the Template trait
+use futures_util::{future::{TryFutureExt, LocalBoxFuture}, FutureExt};
 
 #[derive(Template)]
 #[template(path = "page.html")]
@@ -204,7 +210,7 @@ where
     S::Future: 'static,
     B: 'static,
 {
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse<EitherBody<B>>;
 
     type Error = actix_web::Error;
 
@@ -215,12 +221,12 @@ where
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(LanguageMiddleware{service}))
+        ready(Ok(LanguageMiddleware { service }))
     }
 }
 
 struct LanguageMiddleware<S> {
-    service: S
+    service: S,
 }
 
 impl<S, B> Service<ServiceRequest> for LanguageMiddleware<S>
@@ -229,13 +235,18 @@ where
     S::Future: 'static,
     B: 'static,
 {
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse<EitherBody<B>>;
     type Error = actix_web::Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + 'static>>;
+    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     forward_ready!(service);
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let lang_code = req.path().trim_start_matches('/').split('/').next().unwrap_or("");
+        let lang_code = req
+            .path()
+            .trim_start_matches('/')
+            .split('/')
+            .next()
+            .unwrap_or("");
         // do we have a good lang code?
         let lang = Lang::try_from(lang_code);
         // no: extract from accept-language...
@@ -250,21 +261,19 @@ where
             };
 
             let new_path = format!("/{}/{}", lang.as_ref(), req.path().trim_start_matches("/"));
-            req.headers_mut().get_mut(header::LOCATION).unwrap();
+            let resp = req.into_response(
+                HttpResponse::Found()
+                    .append_header((header::LOCATION, new_path))
+                    .finish()
+                    .map_into_right_body(),
+            );
 
-            Box::pin(async move {
-                let resp = HttpResponse::Found()
-                    .append_header((http::header::LOCATION, new_path))
-                    .finish();
-                Ok(ServiceResponse::<B>::new(req.into_parts().0, resp))
-            })
+            Box::pin(async { Ok(resp) })
         } else {
-            todo!()
-            // Box::pin(self.service.call(req))
+            self.service.call(req).map_ok(ServiceResponse::map_into_left_body).boxed_local()
         }
     }
 }
-
 
 async fn prefix_fallback_lang(req: actix_web::HttpRequest) -> impl Responder {
     log::info!("entered prefix fallback");
@@ -294,8 +303,11 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(middleware::Logger::default())
             .wrap(middleware::NormalizePath::trim())
-            .wrap(LanguageConcierge)
+            .wrap(middleware::Logger::default())
             .service(fs::Files::new("/static", "static").use_last_modified(true)) // Serve static files
+            .wrap(middleware::Logger::default())
+            .wrap(LanguageConcierge)
+            .wrap(middleware::Logger::default())
             .service(
                 web::scope("/{lang}")
                     .route("", web::get().to(index))
