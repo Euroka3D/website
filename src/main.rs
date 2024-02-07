@@ -34,6 +34,7 @@ async fn faq(_lang: Lang) -> impl Responder {
     HttpResponse::Ok().body("raw-content here")
 }
 
+// TODO: do this at app init
 fn load_fluent_bundles(lang: &LanguageIdentifier) -> FluentBundle<FluentResource> {
     let ftl_path = format!("locales/{}.ftl", lang);
     let ftl_string = std::fs::read_to_string(&ftl_path)
@@ -185,7 +186,6 @@ impl Default for Lang {
 
 impl FromRequest for Lang {
     type Error = Box<dyn std::error::Error>;
-
     type Future = Ready<Result<Lang, Self::Error>>;
 
     fn from_request(
@@ -209,13 +209,9 @@ where
     B: 'static,
 {
     type Response = ServiceResponse<EitherBody<B>>;
-
     type Error = actix_web::Error;
-
     type Transform = LanguageMiddleware<S>;
-
     type InitError = ();
-
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
@@ -272,7 +268,7 @@ where
                 resp.map_into_left_body()
             }
         });
-        Box::pin(async move { resp.await })
+        Box::pin(resp)
     }
 }
 
