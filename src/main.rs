@@ -1,9 +1,9 @@
 #![allow(clippy::uninlined_format_args)]
 use actix_files as fs;
-use actix_web::{http, middleware, web, App, FromRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{http::{self, header}, middleware, web, App, FromRequest, HttpResponse, HttpServer, Responder, dev::{Transform, ServiceResponse, ServiceRequest, Service, forward_ready}};
 use askama::Template;
 use fluent::{FluentBundle, FluentResource};
-use std::future::Ready;
+use std::{future::{ready, Ready, Future }, pin::Pin};
 use unic_langid::LanguageIdentifier; // Make sure you include the Template trait
 
 #[derive(Template)]
@@ -195,6 +195,77 @@ impl FromRequest for Lang {
         std::future::ready(Ok(Lang::try_from(lang_str).unwrap_or_default()))
     }
 }
+
+struct LanguageConcierge;
+
+impl<S, B> Transform<S, ServiceRequest> for LanguageConcierge
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error>,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+
+    type Error = actix_web::Error;
+
+    type Transform = LanguageMiddleware<S>;
+
+    type InitError = ();
+
+    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        ready(Ok(LanguageMiddleware{service}))
+    }
+}
+
+struct LanguageMiddleware<S> {
+    service: S
+}
+
+impl<S, B> Service<ServiceRequest> for LanguageMiddleware<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error>,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = actix_web::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + 'static>>;
+
+    forward_ready!(service);
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let lang_code = req.path().trim_start_matches('/').split('/').next().unwrap_or("");
+        // do we have a good lang code?
+        let lang = Lang::try_from(lang_code);
+        // no: extract from accept-language...
+        if lang.is_err() {
+            let lang_str = req
+                .headers()
+                .get("Accept-Language")
+                .and_then(|hv| hv.to_str().ok())
+                .unwrap_or_default();
+            let Ok(lang) = Lang::from_accept_lang_header(lang_str) else {
+                todo!("handle no lang, no accept language");
+            };
+
+            let new_path = format!("/{}/{}", lang.as_ref(), req.path().trim_start_matches("/"));
+            req.headers_mut().get_mut(header::LOCATION).unwrap();
+
+            Box::pin(async move {
+                let resp = HttpResponse::Found()
+                    .append_header((http::header::LOCATION, new_path))
+                    .finish();
+                Ok(ServiceResponse::<B>::new(req.into_parts().0, resp))
+            })
+        } else {
+            todo!()
+            // Box::pin(self.service.call(req))
+        }
+    }
+}
+
+
 async fn prefix_fallback_lang(req: actix_web::HttpRequest) -> impl Responder {
     log::info!("entered prefix fallback");
     let path = req.path().trim_start_matches('/');
@@ -223,6 +294,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(middleware::Logger::default())
             .wrap(middleware::NormalizePath::trim())
+            .wrap(LanguageConcierge)
             .service(fs::Files::new("/static", "static").use_last_modified(true)) // Serve static files
             .service(
                 web::scope("/{lang}")
