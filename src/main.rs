@@ -3,8 +3,8 @@ use actix_files as fs;
 use actix_web::{
     body::EitherBody,
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    http::{self, header},
-    middleware, web, App, FromRequest, HttpResponse, HttpServer, Responder,
+    http::{self, header::{self, HeaderValue}, StatusCode},
+    middleware, web, App, FromRequest, HttpResponse, HttpServer, Responder, HttpMessage,
 };
 use askama::Template;
 use fluent::{FluentBundle, FluentResource};
@@ -238,37 +238,58 @@ where
 
     forward_ready!(service);
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let lang_code = req
+        let lang = req
             .path()
             .trim_start_matches('/')
             .split('/')
             .next()
-            .unwrap_or("");
-        // do we have a good lang code?
-        let lang = Lang::try_from(lang_code);
-        // no: extract from accept-language...
-        if lang.is_err() {
-            let lang_str = req
-                .headers()
-                .get("Accept-Language")
-                .and_then(|hv| hv.to_str().ok())
-                .unwrap_or_default();
-            let Ok(lang) = Lang::from_accept_lang_header(lang_str) else {
-                todo!("handle no lang, no accept language");
-            };
-
-            let new_path = format!("/{}/{}", lang.as_ref(), req.path().trim_start_matches("/"));
-            let resp = req.into_response(
-                HttpResponse::Found()
-                    .append_header((header::LOCATION, new_path))
-                    .finish()
-                    .map_into_right_body(),
-            );
-
-            Box::pin(async { Ok(resp) })
-        } else {
-            self.service.call(req).map_ok(ServiceResponse::map_into_left_body).boxed_local()
+            .map(Lang::try_from);
+        if let Some(Ok(l)) = lang {
+            req.extensions_mut().insert(l);
         }
+        let resp = self
+            .service
+            .call(req)
+            .map_ok(|resp: ServiceResponse<B>| {
+                let stat = resp.response().status();
+                if stat == StatusCode::NOT_FOUND {
+                    let new_path = format!("/en/{}", resp.request().path().trim_start_matches('/'));
+                    let redir_resp = HttpResponse::Found()
+                        .insert_header((header::LOCATION, new_path))
+                        .finish()
+                        .map_into_right_body();
+                    ServiceResponse::new(resp.into_parts().0, redir_resp)
+                } else {
+
+                    resp.map_into_left_body()
+                }
+        });
+        Box::pin(async move { resp.await})
+    //    // do we have a good lang code?
+    //    let lang = Lang::try_from(lang_code);
+    //    // no: extract from accept-language...
+    //    if lang.is_err() {
+    //        let lang_str = req
+    //            .headers()
+    //            .get("Accept-Language")
+    //            .and_then(|hv| hv.to_str().ok())
+    //            .unwrap_or_default();
+    //        let Ok(lang) = Lang::from_accept_lang_header(lang_str) else {
+    //            todo!("handle no lang, no accept language");
+    //        };
+
+    //        let new_path = format!("/{}/{}", lang.as_ref(), req.path().trim_start_matches("/"));
+    //        let resp = req.into_response(
+    //            HttpResponse::Found()
+    //                .append_header((header::LOCATION, new_path))
+    //                .finish()
+    //                .map_into_right_body(),
+    //        );
+
+    //        Box::pin(async { Ok(resp) })
+    //    } else {
+    //        self.service.call(req).map_ok(ServiceResponse::map_into_left_body).boxed_local()
+    //    }
     }
 }
 
