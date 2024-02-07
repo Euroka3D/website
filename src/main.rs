@@ -160,14 +160,12 @@ impl<'a> TryFrom<&'a str> for Lang {
     type Error = &'a str;
 
     fn try_from(lang_str: &'a str) -> Result<Self, Self::Error> {
-        log::info!("entered try-from string to lang {}", lang_str);
         // from the `-` onwards: get rid of it. we don't care about region
-        let lang = match dbg!(lang_str.split_once('-')) {
+        let lang = match lang_str.split_once('-') {
             Some((lang, _region)) => lang,
             _ => lang_str,
         };
 
-        log::info!("lang: {}", lang);
 
         match lang {
             "en" => Ok(Lang::En),
@@ -193,7 +191,6 @@ impl FromRequest for Lang {
         req: &actix_web::HttpRequest,
         _payload: &mut actix_web::dev::Payload,
     ) -> Self::Future {
-        log::info!("entered from-request");
         let Some(lang_str) = req.match_info().get("lang") else {
             return std::future::ready(Ok(Lang::default()));
         };
@@ -275,25 +272,6 @@ where
     }
 }
 
-async fn prefix_fallback_lang(req: actix_web::HttpRequest) -> impl Responder {
-    log::info!("entered prefix fallback");
-    let path = req.path().trim_start_matches('/');
-    let lang_str = req
-        .headers()
-        .get("Accept-Language")
-        .and_then(|hv| hv.to_str().ok())
-        .unwrap_or_default();
-    let Ok(lang) = Lang::from_accept_lang_header(lang_str) else {
-        return HttpResponse::InternalServerError().finish();
-    };
-
-    log::info!("end of prefix addition: {:#?}", &lang);
-    let new_path = format!("/{}/{}", lang.as_ref(), path);
-    HttpResponse::Found()
-        .append_header((http::header::LOCATION, new_path))
-        .finish()
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "info");
@@ -302,18 +280,15 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .wrap(middleware::Logger::default())
-            .wrap(middleware::NormalizePath::trim())
-            .wrap(middleware::Logger::default())
             .service(fs::Files::new("/static", "static").use_last_modified(true)) // Serve static files
-            .wrap(middleware::Logger::default())
+            .wrap(middleware::NormalizePath::trim())
             .wrap(LanguageConcierge)
-            .wrap(middleware::Logger::default())
             .service(
                 web::scope("/{lang}")
                     .route("", web::get().to(index))
+                    .route("/", web::get().to(index))
                     .route("/faq", web::get().to(faq)),
             )
-            .default_service(web::get().to(prefix_fallback_lang))
     })
     .bind("127.0.0.1:8080")?
     .run()
