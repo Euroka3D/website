@@ -3,14 +3,21 @@ use actix_files as fs;
 use actix_web::{
     body::EitherBody,
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    http::{self, header::{self, HeaderValue}, StatusCode},
-    middleware, web, App, FromRequest, HttpResponse, HttpServer, Responder, HttpMessage,
+    http::{
+        self,
+        header::{self, HeaderValue},
+        StatusCode,
+    },
+    middleware, web, App, FromRequest, HttpMessage, HttpResponse, HttpServer, Responder,
 };
 use askama::Template;
 use fluent::{FluentBundle, FluentResource};
+use futures_util::{
+    future::{LocalBoxFuture, TryFutureExt},
+    FutureExt,
+};
 use std::future::{ready, Ready};
 use unic_langid::LanguageIdentifier; // Make sure you include the Template trait
-use futures_util::{future::{TryFutureExt, LocalBoxFuture}, FutureExt};
 
 #[derive(Template)]
 #[template(path = "page.html")]
@@ -166,7 +173,6 @@ impl<'a> TryFrom<&'a str> for Lang {
             _ => lang_str,
         };
 
-
         match lang {
             "en" => Ok(Lang::En),
             "fr" => Ok(Lang::Fr),
@@ -247,49 +253,45 @@ where
         if let Some(Ok(l)) = lang {
             req.extensions_mut().insert(l);
         }
-        let resp = self
-            .service
-            .call(req)
-            .map_ok(|resp: ServiceResponse<B>| {
-                let stat = resp.response().status();
-                if stat == StatusCode::NOT_FOUND {
-                    let new_path = format!("/en/{}", resp.request().path().trim_start_matches('/'));
-                    let redir_resp = HttpResponse::Found()
-                        .insert_header((header::LOCATION, new_path))
-                        .finish()
-                        .map_into_right_body();
-                    ServiceResponse::new(resp.into_parts().0, redir_resp)
-                } else {
-
-                    resp.map_into_left_body()
-                }
+        let resp = self.service.call(req).map_ok(|resp: ServiceResponse<B>| {
+            let stat = resp.response().status();
+            if stat == StatusCode::NOT_FOUND {
+                let new_path = format!("/en/{}", resp.request().path().trim_start_matches('/'));
+                let redir_resp = HttpResponse::Found()
+                    .insert_header((header::LOCATION, new_path))
+                    .finish()
+                    .map_into_right_body();
+                ServiceResponse::new(resp.into_parts().0, redir_resp)
+            } else {
+                resp.map_into_left_body()
+            }
         });
-        Box::pin(async move { resp.await})
-    //    // do we have a good lang code?
-    //    let lang = Lang::try_from(lang_code);
-    //    // no: extract from accept-language...
-    //    if lang.is_err() {
-    //        let lang_str = req
-    //            .headers()
-    //            .get("Accept-Language")
-    //            .and_then(|hv| hv.to_str().ok())
-    //            .unwrap_or_default();
-    //        let Ok(lang) = Lang::from_accept_lang_header(lang_str) else {
-    //            todo!("handle no lang, no accept language");
-    //        };
+        Box::pin(async move { resp.await })
+        //    // do we have a good lang code?
+        //    let lang = Lang::try_from(lang_code);
+        //    // no: extract from accept-language...
+        //    if lang.is_err() {
+        //        let lang_str = req
+        //            .headers()
+        //            .get("Accept-Language")
+        //            .and_then(|hv| hv.to_str().ok())
+        //            .unwrap_or_default();
+        //        let Ok(lang) = Lang::from_accept_lang_header(lang_str) else {
+        //            todo!("handle no lang, no accept language");
+        //        };
 
-    //        let new_path = format!("/{}/{}", lang.as_ref(), req.path().trim_start_matches("/"));
-    //        let resp = req.into_response(
-    //            HttpResponse::Found()
-    //                .append_header((header::LOCATION, new_path))
-    //                .finish()
-    //                .map_into_right_body(),
-    //        );
+        //        let new_path = format!("/{}/{}", lang.as_ref(), req.path().trim_start_matches("/"));
+        //        let resp = req.into_response(
+        //            HttpResponse::Found()
+        //                .append_header((header::LOCATION, new_path))
+        //                .finish()
+        //                .map_into_right_body(),
+        //        );
 
-    //        Box::pin(async { Ok(resp) })
-    //    } else {
-    //        self.service.call(req).map_ok(ServiceResponse::map_into_left_body).boxed_local()
-    //    }
+        //        Box::pin(async { Ok(resp) })
+        //    } else {
+        //        self.service.call(req).map_ok(ServiceResponse::map_into_left_body).boxed_local()
+        //    }
     }
 }
 
