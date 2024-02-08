@@ -109,6 +109,7 @@ impl AboutTemplate {
         }
     }
 }
+
 pub async fn about(_lang: Lang) -> impl Responder {
     HttpResponse::Ok().body("raw-content here")
 }

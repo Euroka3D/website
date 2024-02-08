@@ -60,15 +60,16 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .wrap(middleware::Logger::default())
             .service(fs::Files::new("/static", "static").use_last_modified(true)) // Serve static files
             .wrap(middleware::NormalizePath::trim())
             .wrap(LanguageConcierge)
+            .wrap(middleware::Logger::default())
             .service(
                 web::scope("/{lang}")
                     .route("", web::get().to(handlers::index))
                     .route("/", web::get().to(handlers::index))
-                    .route("/faq", web::get().to(handlers::faq)),
+                    .route("/faq", web::get().to(handlers::faq))
+                    .route("/about", web::get().to(handlers::about)),
             )
     })
     .bind("127.0.0.1:8080")?
