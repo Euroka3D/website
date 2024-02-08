@@ -1,19 +1,10 @@
 #![allow(clippy::uninlined_format_args)]
 use actix_files as fs;
-use actix_web::{http::header::LanguageTag, middleware, web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer};
 
 mod handlers;
 mod langs;
 use langs::LanguageConcierge;
-
-#[derive(Debug, Hash, Eq, PartialEq)]
-enum Lang {
-    En,
-    Fr,
-    // German
-    De,
-    He,
-}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

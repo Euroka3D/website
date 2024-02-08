@@ -2,16 +2,16 @@ use actix_web::{
     body::EitherBody,
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     http::{
-        header::{self, AcceptLanguage, Header, HeaderMap},
+        header::{self, AcceptLanguage, Header, LanguageTag},
         StatusCode,
     },
-    FromRequest, HttpResponse, HttpMessage,
+    FromRequest, HttpMessage, HttpResponse,
 };
 use futures_util::future::{LocalBoxFuture, TryFutureExt};
 use std::future::{ready, Ready};
 
 #[derive(Debug, Hash, Eq, PartialEq)]
-enum Lang {
+pub enum Lang {
     En,
     Fr,
     // German
@@ -29,7 +29,38 @@ impl Lang {
             _ => Err(lang_str),
         }
     }
-
+    fn try_from_message<M: HttpMessage>(value: &M) -> Result<Self, String> {
+        // todo: check TLD and route first
+        let langs: AcceptLanguage = AcceptLanguage::parse(value).map_err(|e| e.to_string())?;
+        let mut max = 0.0;
+        let mut preferred = Err("".to_string());
+        for tag in langs.0.iter().filter(|t| {
+            t.item
+                .item()
+                .map(|t| Lang::from_str(t.primary_language()))
+                .is_some()
+        }) {
+            let qual = tag.quality.to_string().parse().unwrap();
+            if qual >= 1.0 {
+                return Ok(tag
+                    .item
+                    .item()
+                    .map(LanguageTag::primary_language)
+                    .and_then(|s| Lang::from_str(s).ok())
+                    .unwrap_or_default());
+            }
+            if qual > max {
+                max = qual;
+                let parse = Lang::from_str(tag.item.item().unwrap().primary_language())
+                    .map_err(|_| "bad parse".to_string());
+                if parse.is_ok() {
+                    preferred = parse;
+                    max = qual;
+                }
+            }
+        }
+        preferred
+    }
 }
 
 impl AsRef<str> for Lang {
@@ -46,27 +77,6 @@ impl AsRef<str> for Lang {
 impl Default for Lang {
     fn default() -> Self {
         Self::En
-    }
-}
-
-impl<M: HttpMessage> From<&M> for Lang {
-    fn from(value: &M) -> Self {
-        // todo: check TLD and route first
-        let Ok(accepts) = value.headers().get(header::ACCEPT_LANGUAGE).map(AcceptLanguage::parse) else {
-                return Lang::default();
-            };
-        let max = 0.0;
-        let preferred = None;
-        for tag in accepts.iter().filter(|t| t.item.item().map(|t| Lang::from(t.primary_language()))) {
-            let qual = tag.quality().parse().unwrap();
-            if qual >= 1.0 {
-                return tag.item.item().primary_language().try_into().unwrap_or_default();
-            }
-            if qual > max {
-                preferred = Some(tag.item.item().unwrap().try_into().unwrap())
-            }
-        }
-        preferred.unwrap_or_default()
     }
 }
 
@@ -109,7 +119,6 @@ pub struct LanguageMiddleware<S> {
     service: S,
 }
 
-
 impl<S, B> Service<ServiceRequest> for LanguageMiddleware<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error>,
@@ -133,7 +142,7 @@ where
         }
         let resp = self.service.call(req).map_ok(|resp: ServiceResponse<B>| {
             let original_req = resp.request();
-            let lang = Lang::from(*original_req);
+            let lang = Lang::try_from_message(original_req).unwrap_or_default();
             let stat = resp.response().status();
             if stat == StatusCode::NOT_FOUND {
                 let new_path = format!(
