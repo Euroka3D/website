@@ -2,7 +2,6 @@ use crate::Lang;
 use actix_web::{HttpResponse, Responder};
 use askama::Template;
 use fluent_templates::{static_loader, Loader};
-use unic_langid::LanguageIdentifier;
 
 #[derive(Template)]
 #[template(path = "page.html")]

@@ -1,6 +1,6 @@
 #![allow(clippy::uninlined_format_args)]
 use actix_files as fs;
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{http::header::LanguageTag, middleware, web, App, HttpServer};
 
 mod handlers;
 mod langs;
@@ -15,44 +15,6 @@ enum Lang {
     He,
 }
 
-impl Lang {
-    fn from_accept_lang_header(langs_str: &str) -> Result<Lang, ()> {
-        let mut best_lang = None;
-        let mut highest_qual = 0.0;
-
-        for entry in langs_str.split(',') {
-            // separate the language and the priority
-            let mut parts = entry.split(';');
-            let lang = parts.next().unwrap_or_default().trim();
-            let lang = Lang::try_from(lang).unwrap_or_default();
-            let Some(qual_part) = parts.next() else {
-                return Ok(lang);
-            };
-            let stripped_qual: &str = qual_part
-                .strip_prefix("q=")
-                .expect("todo: trigger a malformed header error");
-            let quality: f32 = stripped_qual
-                .parse::<f32>()
-                .expect("todo: trigger a malformed header error");
-            if quality == 1.0 {
-                return Ok(lang);
-            }
-            if quality == 0.0 {
-                continue;
-            }
-            if best_lang.is_none() {
-                best_lang = Some(lang);
-                highest_qual = quality;
-                continue;
-            };
-            if quality > highest_qual {
-                best_lang = Some(lang);
-                highest_qual = quality;
-            }
-        }
-        best_lang.ok_or(())
-    }
-}
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "info");
