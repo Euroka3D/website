@@ -8,9 +8,7 @@ use actix_web::{
     FromRequest, HttpMessage, HttpResponse,
 };
 use futures_util::future::{LocalBoxFuture, TryFutureExt};
-use std::{
-    future::{ready, Ready},
-};
+use std::future::{ready, Ready};
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub enum Lang {
@@ -127,10 +125,11 @@ pub struct LanguageMiddleware<S> {
 }
 
 fn lang_guard(req: &ServiceRequest) -> bool {
-
     let path = req.path().trim_start_matches('/');
     let accepteds = ["en", "fr", "de"];
-    path.split('/').next().map_or(false, |root_path| accepteds.contains(&root_path))
+    path.split('/')
+        .next()
+        .map_or(false, |root_path| accepteds.contains(&root_path))
 }
 impl<S, B> Service<ServiceRequest> for LanguageMiddleware<S>
 where
@@ -146,14 +145,12 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         if !lang_guard(&req) {
             let lang = Lang::try_from_message(&req).unwrap_or_default();
-            let new_path = format!(
-                "/{}/{}",
-                lang.as_ref(),
-                req.path().trim_start_matches('/')
-            );
-            let resp: HttpResponse = HttpResponse::Found().insert_header(("location", new_path)).finish();
+            let new_path = format!("/{}/{}", lang.as_ref(), req.path().trim_start_matches('/'));
+            let resp: HttpResponse = HttpResponse::Found()
+                .insert_header(("location", new_path))
+                .finish();
             let resp = req.into_response(resp).map_into_right_body();
-            return Box::pin(async {Ok(resp)});
+            return Box::pin(async { Ok(resp) });
         }
 
         Box::pin(self.service.call(req).map_ok(|r| r.map_into_left_body()))
