@@ -9,7 +9,6 @@ use actix_web::{
 };
 use futures_util::future::{LocalBoxFuture, TryFutureExt};
 use std::{
-    error::Error,
     future::{ready, Ready},
 };
 
@@ -102,9 +101,11 @@ impl FromRequest for Lang {
     }
 }
 
-pub struct LanguageConcierge;
+/// Middleware that constrains url paths to `/{supported_lang}`, and failing that guard, will
+/// prepend a language to the url and emit a redirect
+pub struct LangGuardRedir;
 
-impl<S, B> Transform<S, ServiceRequest> for LanguageConcierge
+impl<S, B> Transform<S, ServiceRequest> for LangGuardRedir
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error>,
     S::Future: 'static,
@@ -125,6 +126,12 @@ pub struct LanguageMiddleware<S> {
     service: S,
 }
 
+fn lang_guard(req: &ServiceRequest) -> bool {
+
+    let path = req.path().trim_start_matches('/');
+    let accepteds = ["en", "fr", "de"];
+    path.split('/').next().map_or(false, |root_path| accepteds.contains(&root_path))
+}
 impl<S, B> Service<ServiceRequest> for LanguageMiddleware<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error>,
@@ -137,25 +144,18 @@ where
 
     forward_ready!(service);
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let resp = self.service.call(req).map_ok(|resp: ServiceResponse<B>| {
-            let original_req = resp.request();
-            let lang = Lang::try_from_message(original_req).unwrap_or_default();
-            let stat = resp.response().status();
-            if stat == StatusCode::NOT_FOUND {
-                let new_path = format!(
-                    "/{}/{}",
-                    lang.as_ref(),
-                    resp.request().path().trim_start_matches('/')
-                );
-                let redir_resp = HttpResponse::Found()
-                    .insert_header((header::LOCATION, new_path))
-                    .finish()
-                    .map_into_right_body();
-                ServiceResponse::new(resp.into_parts().0, redir_resp)
-            } else {
-                resp.map_into_left_body()
-            }
-        });
-        Box::pin(resp)
+        if !lang_guard(&req) {
+            let lang = Lang::try_from_message(&req).unwrap_or_default();
+            let new_path = format!(
+                "/{}/{}",
+                lang.as_ref(),
+                req.path().trim_start_matches('/')
+            );
+            let resp: HttpResponse = HttpResponse::Found().insert_header(("location", new_path)).finish();
+            let resp = req.into_response(resp).map_into_right_body();
+            return Box::pin(async {Ok(resp)});
+        }
+
+        Box::pin(self.service.call(req).map_ok(|r| r.map_into_left_body()))
     }
 }

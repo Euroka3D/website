@@ -16,18 +16,11 @@ async fn main() -> std::io::Result<()> {
             .service(fs::Files::new("/static", "static").use_last_modified(true)) // Serve static files
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
+            // First: getting here means that if it's not lang'd, then 404, which implies a
+            // redirect...
+            .wrap(LanguageConcierge)
             .service(
                 web::scope("/{lang}")
-                    .guard(guard::fn_guard(|ctx| {
-                        ctx.head()
-                            .uri
-                            .path()
-                            .trim_start_matches('/')
-                            .split('/')
-                            .next()
-                            .map_or(false, |rp| ["en", "fr", "de"].contains(&rp))
-                    }))
-                    .wrap(LanguageConcierge)
                     .route("", web::get().to(handlers::index))
                     .route("/faq", web::get().to(handlers::faq))
                     .route("/about_page", web::get().to(handlers::about)),
