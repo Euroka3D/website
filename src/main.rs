@@ -1,10 +1,13 @@
 #![allow(clippy::uninlined_format_args)]
+
+use std::collections::HashSet;
+
 use actix_files as fs;
-use actix_web::{guard, middleware, web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer};
 
 mod handlers;
 mod langs;
-use langs::LanguageConcierge;
+use langs::LangGuardRedir;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -18,7 +21,14 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             // First: getting here means that if it's not lang'd, then 404, which implies a
             // redirect...
-            .wrap(LanguageConcierge)
+            .wrap(LangGuardRedir {
+                supported_langs: HashSet::from([
+                    "en".to_string(),
+                    "fr".to_string(),
+                    "de".to_string(),
+                ])
+                .clone(),
+            })
             .service(
                 web::scope("/{lang}")
                     .route("", web::get().to(handlers::index))

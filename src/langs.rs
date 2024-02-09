@@ -8,7 +8,10 @@ use actix_web::{
     FromRequest, HttpMessage, HttpResponse,
 };
 use futures_util::future::{LocalBoxFuture, TryFutureExt};
-use std::future::{ready, Ready};
+use std::{
+    collections::HashSet,
+    future::{ready, Ready},
+};
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub enum Lang {
@@ -101,7 +104,9 @@ impl FromRequest for Lang {
 
 /// Middleware that constrains url paths to `/{supported_lang}`, and failing that guard, will
 /// prepend a language to the url and emit a redirect
-pub struct LangGuardRedir;
+pub struct LangGuardRedir {
+    pub supported_langs: HashSet<String>,
+}
 
 impl<S, B> Transform<S, ServiceRequest> for LangGuardRedir
 where
@@ -116,20 +121,23 @@ where
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(LanguageMiddleware { service }))
+        ready(Ok(LanguageMiddleware {
+            service,
+            supported_langs: self.supported_langs.clone(),
+        }))
     }
 }
 
 pub struct LanguageMiddleware<S> {
     service: S,
+    supported_langs: HashSet<String>,
 }
 
-fn lang_guard(req: &ServiceRequest) -> bool {
+fn lang_guard(req: &ServiceRequest, supported_langs: &HashSet<String>) -> bool {
     let path = req.path().trim_start_matches('/');
-    let accepteds = ["en", "fr", "de"];
     path.split('/')
         .next()
-        .map_or(false, |root_path| accepteds.contains(&root_path))
+        .map_or(false, |root_path| supported_langs.contains(root_path))
 }
 impl<S, B> Service<ServiceRequest> for LanguageMiddleware<S>
 where
@@ -143,7 +151,7 @@ where
 
     forward_ready!(service);
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        if !lang_guard(&req) {
+        if !lang_guard(&req, &self.supported_langs) {
             let lang = Lang::try_from_message(&req).unwrap_or_default();
             let new_path = format!("/{}/{}", lang.as_ref(), req.path().trim_start_matches('/'));
             let resp: HttpResponse = HttpResponse::Found()
