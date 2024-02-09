@@ -8,7 +8,10 @@ use actix_web::{
     FromRequest, HttpMessage, HttpResponse,
 };
 use futures_util::future::{LocalBoxFuture, TryFutureExt};
-use std::future::{ready, Ready};
+use std::{
+    error::Error,
+    future::{ready, Ready},
+};
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub enum Lang {
@@ -88,11 +91,14 @@ impl FromRequest for Lang {
         req: &actix_web::HttpRequest,
         _payload: &mut actix_web::dev::Payload,
     ) -> Self::Future {
-        let Some(lang_str) = req.match_info().get("lang") else {
-            return std::future::ready(Ok(Lang::default()));
-        };
-
-        std::future::ready(Ok(Lang::from_str(lang_str).unwrap_or_default()))
+        let res = req
+            .path()
+            .trim_start_matches("/")
+            .split('/')
+            .next()
+            .and_then(|s| Lang::from_str(s).ok())
+            .ok_or(req.path().into());
+        std::future::ready(res)
     }
 }
 
@@ -131,15 +137,6 @@ where
 
     forward_ready!(service);
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let lang = req
-            .path()
-            .trim_start_matches('/')
-            .split('/')
-            .next()
-            .map(Lang::from_str);
-        if let Some(Ok(l)) = lang {
-            req.extensions_mut().insert(l);
-        }
         let resp = self.service.call(req).map_ok(|resp: ServiceResponse<B>| {
             let original_req = resp.request();
             let lang = Lang::try_from_message(original_req).unwrap_or_default();
