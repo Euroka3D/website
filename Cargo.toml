@@ -14,4 +14,5 @@ fluent = "0.16.0"
 fluent-templates = "0.8.0"
 futures-util = "0.3.30"
 log = "0.4.20"
+serde = { version = "1.0.196", features = ["derive"] }
 unic-langid = "0.9.4"

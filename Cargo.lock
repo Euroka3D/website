@@ -648,6 +648,7 @@ dependencies = [
  "fluent-templates",
  "futures-util",
  "log",
+ "serde",
  "unic-langid",
 ]
 
