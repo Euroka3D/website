@@ -1,29 +1,31 @@
 use actix_web::{
     body::EitherBody,
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    http::{
-        header::{self, AcceptLanguage, Header, LanguageTag},
-        StatusCode,
-    },
+    http::header::{AcceptLanguage, Header, LanguageTag},
     FromRequest, HttpMessage, HttpResponse,
 };
 use futures_util::future::{LocalBoxFuture, TryFutureExt};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     future::{ready, Ready},
 };
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+
+#[derive(Debug, Deserialize, Serialize)]
 pub enum Lang {
+    #[serde(rename = "en")]
     En,
+    #[serde(rename = "fr")]
     Fr,
-    // German
+    #[serde(rename = "de")]
     De,
+    #[serde(rename = "he")]
     He,
 }
 
 impl Lang {
-    fn from_str<'a>(lang_str: &'a str) -> Result<Self, &'a str> {
+    fn from_str(lang_str: &str) -> Result<Self, &str> {
         match lang_str {
             "en" => Ok(Lang::En),
             "fr" => Ok(Lang::Fr),
@@ -36,7 +38,7 @@ impl Lang {
         // todo: check TLD and route first
         let langs: AcceptLanguage = AcceptLanguage::parse(value).map_err(|e| e.to_string())?;
         let mut max = 0.0;
-        let mut preferred = Err("".to_string());
+        let mut preferred = Err(String::new());
         for tag in langs.0.iter().filter(|t| {
             t.item
                 .item()
@@ -91,14 +93,13 @@ impl FromRequest for Lang {
         req: &actix_web::HttpRequest,
         _payload: &mut actix_web::dev::Payload,
     ) -> Self::Future {
-        let res = req
+        std::future::ready(req
             .path()
-            .trim_start_matches("/")
+            .trim_start_matches('/')
             .split('/')
             .next()
             .and_then(|s| Lang::from_str(s).ok())
-            .ok_or(req.path().into());
-        std::future::ready(res)
+            .ok_or(req.path().into()))
     }
 }
 
@@ -150,6 +151,9 @@ where
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     forward_ready!(service);
+
+    // TODO: make it so instead of `no lang -> redirect -> serve content` it becomes `no-lang ->
+    // serve content -> update browser at new lang`, so as to have just the one request
     fn call(&self, req: ServiceRequest) -> Self::Future {
         if !lang_guard(&req, &self.supported_langs) {
             let lang = Lang::try_from_message(&req).unwrap_or_default();
@@ -161,6 +165,6 @@ where
             return Box::pin(async { Ok(resp) });
         }
 
-        Box::pin(self.service.call(req).map_ok(|r| r.map_into_left_body()))
+        Box::pin(self.service.call(req).map_ok(ServiceResponse::map_into_left_body))
     }
 }

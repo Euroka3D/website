@@ -16,9 +16,9 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .service(fs::Files::new("/static", "static").use_last_modified(true)) // Serve static files
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
+            .service(fs::Files::new("/static", "static").use_last_modified(true))
             // First: getting here means that if it's not lang'd, then 404, which implies a
             // redirect...
             .wrap(LangGuardRedir {
@@ -31,6 +31,8 @@ async fn main() -> std::io::Result<()> {
             })
             .service(
                 web::scope("/{lang}")
+                    // TODO: make putting this service here redundant.
+                    .service(fs::Files::new("/static", "static").use_last_modified(true))
                     .route("", web::get().to(handlers::index))
                     .route("/faq", web::get().to(handlers::faq))
                     .route("/about_page", web::get().to(handlers::about)),
