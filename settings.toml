@@ -1,0 +1,5 @@
+log_level = "debug"
+supported_languages = ["en", "fr", "de"]
+statics_path = ["./static", "static"]
+listen_addr = "127.0.0.1:8080"
+
