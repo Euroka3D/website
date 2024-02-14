@@ -6,10 +6,9 @@ COPY . .
 
 RUN cargo build --release
 
-FROM debian:bookworm-slim
+FROM gcr.io/distroless/cc
 
 COPY --from=builder /usr/src/euroka3d/target/release/euroka3d /usr/local/bin/euroka3d
-
 COPY --from=builder /usr/src/euroka3d/static /usr/local/bin/static
 COPY --from=builder /usr/src/euroka3d/templates /usr/local/bin/templates
 
