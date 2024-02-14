@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use actix_files as fs;
 use actix_web::{middleware, web, App, HttpServer};
-use config::{Config as CfgLoader, ConfigError, File};
+use config::Config as CfgLoader;
 
 mod handlers;
 mod langs;
