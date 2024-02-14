@@ -81,29 +81,29 @@ pub async fn faq(_lang: Lang) -> impl Responder {
 // struct AboutTemplate {
 //     body_title: String,
 //     title_byline: String,
-// 
+//
 //     intro_title: String,
 //     intro_content: String,
-// 
+//
 //     our_approach_title: String,
 //     our_approach_content: String,
-// 
+//
 //     why_us_title: String,
 //     why_us_content: String,
 // }
-// 
+//
 // impl AboutTemplate {
 //     fn fetch_lang(lang: &Lang) -> Self {
 //         Self {
 //             body_title: msg_get("body_title", lang).unwrap(),
 //             title_byline: msg_get("title_byline", lang).unwrap(),
-// 
+//
 //             intro_title: msg_get("intro_title", lang).unwrap(),
 //             intro_content: msg_get("intro_content", lang).unwrap(),
-// 
+//
 //             our_approach_title: msg_get("our_approach_title", lang).unwrap(),
 //             our_approach_content: msg_get("our_approach_content", lang).unwrap(),
-// 
+//
 //             why_us_title: msg_get("why_us_title", lang).unwrap(),
 //             why_us_content: msg_get("why_us_content", lang).unwrap(),
 //         }

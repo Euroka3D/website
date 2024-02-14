@@ -11,7 +11,6 @@ use std::{
     future::{ready, Ready},
 };
 
-
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Lang {
     #[serde(rename = "en")]
@@ -93,13 +92,14 @@ impl FromRequest for Lang {
         req: &actix_web::HttpRequest,
         _payload: &mut actix_web::dev::Payload,
     ) -> Self::Future {
-        std::future::ready(req
-            .path()
-            .trim_start_matches('/')
-            .split('/')
-            .next()
-            .and_then(|s| Lang::from_str(s).ok())
-            .ok_or(req.path().into()))
+        std::future::ready(
+            req.path()
+                .trim_start_matches('/')
+                .split('/')
+                .next()
+                .and_then(|s| Lang::from_str(s).ok())
+                .ok_or(req.path().into()),
+        )
     }
 }
 
@@ -165,6 +165,10 @@ where
             return Box::pin(async { Ok(resp) });
         }
 
-        Box::pin(self.service.call(req).map_ok(ServiceResponse::map_into_left_body))
+        Box::pin(
+            self.service
+                .call(req)
+                .map_ok(ServiceResponse::map_into_left_body),
+        )
     }
 }
