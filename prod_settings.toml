@@ -2,6 +2,6 @@ log_level = "debug"
 supported_languages = ["en", "fr", "de"]
 statics_path = ["./static", "static"]
 listen_addr = "0.0.0.0:8080"
-ssl_priv = "privkey.pem"
-ssl_fullchain = "fullchain.pem"
+cert_pem = "fullchain.pem"
+key_pem = "privkey.pem"
 

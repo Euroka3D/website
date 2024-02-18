@@ -1,16 +1,21 @@
 #![allow(clippy::uninlined_format_args)]
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fs::File, io::BufReader};
 
 use actix_files as fs;
 use actix_web::{middleware, web, App, HttpServer};
 use config::Config as CfgLoader;
+use rustls::{
+    pki_types::{CertificateDer, PrivateKeyDer},
+    version::TLS13,
+    ServerConfig,
+};
+use rustls_pemfile::{certs, pkcs8_private_keys};
+use serde::Deserialize;
 
 mod handlers;
 mod langs;
 use langs::LangGuardRedir;
-
-use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct Config {
@@ -18,8 +23,40 @@ struct Config {
     statics_path: (String, String),
     supported_languages: HashSet<String>,
     listen_addr: std::net::SocketAddr,
-    ssl_priv:  Option<String>,
-    ssl_fullchain: Option<String>,
+    cert_pem: Option<String>,
+    key_pem: Option<String>,
+}
+
+fn load_rustls_config(cfg: &Config) -> Option<rustls::ServerConfig> {
+    let config = match (&cfg.cert_pem, &cfg.key_pem) {
+        (Some(cert_name), Some(keys_name)) => {
+            let tls_cfg =
+                ServerConfig::builder_with_protocol_versions(&[&TLS13]).with_no_client_auth();
+
+            let cert_file = &mut BufReader::new(File::open(cert_name).unwrap());
+            let key_file = &mut BufReader::new(File::open(keys_name).unwrap());
+
+            let cert_chain: Vec<CertificateDer> = certs(cert_file).map(Result::unwrap).collect();
+
+            let mut keys: Vec<PrivateKeyDer> = pkcs8_private_keys(key_file)
+                .take(1)
+                .map(Result::unwrap)
+                .map(Into::into)
+                .collect();
+
+            let ssl_config = tls_cfg
+                .with_single_cert(
+                    cert_chain,
+                    keys.pop().expect("Could not locate PKCS 8 private keys."),
+                )
+                .unwrap();
+
+            Some(ssl_config)
+        }
+        (None, None) => None,
+        _ => panic!("only one tls source file found"),
+    };
+    config
 }
 
 #[actix_web::main]
@@ -30,10 +67,12 @@ async fn main() -> std::io::Result<()> {
         .unwrap()
         .try_deserialize()
         .unwrap();
+
     std::env::set_var("RUST_LOG", config.log_level.as_str());
     env_logger::init();
 
-    HttpServer::new(move || {
+    let tls_config = load_rustls_config(&config);
+    let unbound = HttpServer::new(move || {
         App::new()
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
@@ -57,8 +96,12 @@ async fn main() -> std::io::Result<()> {
                             .route("/about_page", web::get().to(handlers::about)),
                     ),
             )
-    })
-    .bind(config.listen_addr)?
+    });
+
+    match tls_config {
+        Some(tls_cfg) => unbound.bind_rustls_0_22(config.listen_addr, tls_cfg)?,
+        None => unbound.bind(config.listen_addr)?,
+    }
     .run()
     .await
 }
