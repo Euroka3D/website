@@ -18,6 +18,8 @@ struct Config {
     statics_path: (String, String),
     supported_languages: HashSet<String>,
     listen_addr: std::net::SocketAddr,
+    ssl_priv:  Option<String>,
+    ssl_fullchain: Option<String>,
 }
 
 #[actix_web::main]
