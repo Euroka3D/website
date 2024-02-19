@@ -1,7 +1,7 @@
 log_level = "debug"
 supported_languages = ["en", "fr", "de"]
 statics_path = ["./static", "static"]
-listen_addr = "127.0.0.1:8080"
-cert_pem = "self_cert.pem"
-key_pem = "self_key.pem"
+listen_addr = "0.0.0.0:8080"
+cert_pem = "fullchain.pem"
+key_pem = "privkey.pem"
 

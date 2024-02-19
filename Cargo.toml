@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 actix-files = "0.6.5"
-actix-web = "4.5.1"
+actix-web = { version = "4.5.1", features = ["rustls-0_22"] }
 askama = "0.12.1"
 config = "0.14.0"
 either = { version = "1.10.0", features = ["serde"] }
@@ -16,5 +16,7 @@ fluent = "0.16.0"
 fluent-templates = "0.8.0"
 futures-util = "0.3.30"
 log = { version = "0.4.20", features = ["serde"] }
+rustls = "0.22.2"
+rustls-pemfile = "2.1.0"
 serde = { version = "1.0.196", features = ["derive"] }
 unic-langid = "0.9.4"
