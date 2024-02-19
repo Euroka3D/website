@@ -27,36 +27,31 @@ struct Config {
     key_pem: Option<String>,
 }
 
-fn load_rustls_config(cfg: &Config) -> Option<rustls::ServerConfig> {
-    let config = match (&cfg.cert_pem, &cfg.key_pem) {
-        (Some(cert_name), Some(keys_name)) => {
-            let tls_cfg =
-                ServerConfig::builder_with_protocol_versions(&[&TLS13]).with_no_client_auth();
-
-            let cert_file = &mut BufReader::new(File::open(cert_name).unwrap());
-            let key_file = &mut BufReader::new(File::open(keys_name).unwrap());
-
-            let cert_chain: Vec<CertificateDer> = certs(cert_file).map(Result::unwrap).collect();
-
-            let mut keys: Vec<PrivateKeyDer> = pkcs8_private_keys(key_file)
-                .take(1)
-                .map(Result::unwrap)
-                .map(Into::into)
-                .collect();
-
-            let ssl_config = tls_cfg
-                .with_single_cert(
-                    cert_chain,
-                    keys.pop().expect("Could not locate PKCS 8 private keys."),
-                )
-                .unwrap();
-
-            Some(ssl_config)
-        }
-        (None, None) => None,
-        _ => panic!("only one tls source file found"),
+fn load_rustls_config(cfg: &Config) -> rustls::ServerConfig {
+    let (Some(cert_name), Some(keys_name)) = (&cfg.cert_pem, &cfg.key_pem) else {
+        panic!("cert-files not found");
     };
-    config
+    let tls_cfg = ServerConfig::builder_with_protocol_versions(&[&TLS13]).with_no_client_auth();
+
+    let cert_file = &mut BufReader::new(File::open(cert_name).unwrap());
+    let key_file = &mut BufReader::new(File::open(keys_name).unwrap());
+
+    let cert_chain: Vec<CertificateDer> = certs(cert_file).map(Result::unwrap).collect();
+
+    let mut keys: Vec<PrivateKeyDer> = pkcs8_private_keys(key_file)
+        .take(1)
+        .map(Result::unwrap)
+        .map(Into::into)
+        .collect();
+
+    let ssl_config = tls_cfg
+        .with_single_cert(
+            cert_chain,
+            keys.pop().expect("Could not locate PKCS 8 private keys."),
+        )
+        .unwrap();
+
+    ssl_config
 }
 
 #[actix_web::main]
@@ -72,7 +67,7 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     let tls_config = load_rustls_config(&config);
-    let unbound = HttpServer::new(move || {
+    HttpServer::new(move || {
         App::new()
             .wrap(middleware::NormalizePath::trim())
             .wrap(middleware::Logger::default())
@@ -96,12 +91,8 @@ async fn main() -> std::io::Result<()> {
                             .route("/about_page", web::get().to(handlers::about)),
                     ),
             )
-    });
-
-    match tls_config {
-        Some(tls_cfg) => unbound.bind_rustls_0_22(config.listen_addr, tls_cfg)?,
-        None => unbound.bind(config.listen_addr)?,
-    }
+    })
+    .bind_rustls_0_22(config.listen_addr, tls_config)?
     .run()
     .await
 }
