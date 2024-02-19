@@ -1,0 +1,28 @@
+[tasks.format]
+install_crate = "rustfmt"
+command = "cargo"
+args = ["fmt", "--all" "--", "--check"]
+
+[tasks.clippy]
+command = "cargo"
+args = ["clippy", "--", "-D", "clippy::pedantic"]
+
+[tasks.audit]
+command = "cargo"
+args = ["audit"]
+
+[tasks.outdated]
+command = "cargo"
+args = ["outdated"]
+
+[tasks.my-flow]
+dependencies = [
+    "format",
+    "clippy",
+    "outdated",
+    #"test"
+]
+
+[tasks.self_cert]
+command = "openssl"
+args = ["req -x509 -newkey rsa:4096 -keyout self_key.pem -out self_cert.pem -days 365 -nodes -subj \"/CN=localhost\""]
